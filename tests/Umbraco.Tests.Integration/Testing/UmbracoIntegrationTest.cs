@@ -38,6 +38,7 @@ using Umbraco.Cms.Tests.Integration.DependencyInjection;
 using Umbraco.Cms.Tests.Integration.Extensions;
 using Umbraco.Cms.Tests.Integration.Implementations;
 using Umbraco.Extensions;
+using Umbraco.Persistence.Sqlite;
 
 namespace Umbraco.Cms.Tests.Integration.Testing
 {
@@ -111,7 +112,7 @@ namespace Umbraco.Cms.Tests.Integration.Testing
         [SetUp]
         public virtual void Setup()
         {
-            InMemoryConfiguration[Constants.Configuration.ConfigUnattended + ":" + nameof(UnattendedSettings.InstallUnattended)] = "true";
+            InMemoryConfiguration[Core.Constants.Configuration.ConfigUnattended + ":" + nameof(UnattendedSettings.InstallUnattended)] = "true";
             IHostBuilder hostBuilder = CreateHostBuilder();
 
             IHost host = hostBuilder.Build();
@@ -177,7 +178,8 @@ namespace Umbraco.Cms.Tests.Integration.Testing
                     context.HostingEnvironment = TestHelper.GetWebHostEnvironment();
                     configBuilder.Sources.Clear();
                     configBuilder.AddInMemoryCollection(InMemoryConfiguration);
-
+                    configBuilder.AddJsonFile("appsettings.Tests.json");
+                    configBuilder.AddEnvironmentVariables();
                     Configuration = configBuilder.Build();
                 })
                 .ConfigureServices((hostContext, services) =>
@@ -226,6 +228,7 @@ namespace Umbraco.Cms.Tests.Integration.Testing
                 .AddBackOfficeIdentity()
                 .AddMembersIdentity()
                 .AddExamine()
+                .AddUmbracoSqliteSupport()
                 .AddTestServices(TestHelper, GetAppCaches());
 
             if (TestOptions.Mapper)
@@ -280,7 +283,7 @@ namespace Umbraco.Cms.Tests.Integration.Testing
         /// <remarks>
         /// There must only be ONE instance shared between all tests in a session
         /// </remarks>
-        private static ITestDatabase GetOrCreateDatabase(string filesPath, ILoggerFactory loggerFactory, TestUmbracoDatabaseFactoryProvider dbFactory)
+        private ITestDatabase GetOrCreateDatabase(string filesPath, ILoggerFactory loggerFactory, TestUmbracoDatabaseFactoryProvider dbFactory)
         {
             lock (s_dbLocker)
             {
@@ -289,15 +292,17 @@ namespace Umbraco.Cms.Tests.Integration.Testing
                     return s_dbInstance;
                 }
 
-                // TODO: pull from IConfiguration
                 var settings = new TestDatabaseSettings
                 {
-                    PrepareThreadCount = 4,
-                    EmptyDatabasesCount = 2,
-                    SchemaDatabaseCount = 4
+                    FilesPath = filesPath,
+                    Provider = Configuration.GetValue<string>("Tests:Database:Provider"),
+                    PrepareThreadCount = Configuration.GetValue<int>("Tests:Database:PrepareThreadCount"),
+                    EmptyDatabasesCount = Configuration.GetValue<int>("Tests:Database:EmptyDatabasesCount"),
+                    SchemaDatabaseCount = Configuration.GetValue<int>("Tests:Database:SchemaDatabaseCount"),
+                    SQLServerMasterConnectionString = Configuration.GetValue<string>("Tests:Database:SQLServerMasterConnectionString")
                 };
 
-                s_dbInstance = TestDatabaseFactory.Create(settings, filesPath, loggerFactory, dbFactory);
+                s_dbInstance = TestDatabaseFactory.Create(settings, dbFactory, loggerFactory);
 
                 return s_dbInstance;
             }
@@ -319,9 +324,14 @@ namespace Umbraco.Cms.Tests.Integration.Testing
             }
 
             // need to manually register this factory
-            DbProviderFactories.RegisterFactory(Constants.DbProviderNames.SqlServer, SqlClientFactory.Instance);
+            DbProviderFactories.RegisterFactory(Core.Constants.DbProviderNames.SqlServer, SqlClientFactory.Instance);
 
-            string dbFilePath = Path.Combine(workingDirectory, "LocalDb");
+            string dbFilePath = Path.Combine(workingDirectory, "databases");
+
+            if (!Directory.Exists(dbFilePath))
+            {
+                Directory.CreateDirectory(dbFilePath);
+            }
 
             ITestDatabase db = GetOrCreateDatabase(dbFilePath, loggerFactory, testUmbracoDatabaseFactoryProvider);
 
@@ -398,7 +408,7 @@ namespace Umbraco.Cms.Tests.Integration.Testing
             // It's just been pulled from container and wasn't used to create test database
             Assert.IsFalse(factory.Configured);
 
-            factory.Configure(meta.ConnectionString, Constants.DatabaseProviders.SqlServer);
+            factory.Configure(meta.ConnectionString, meta.Provider);
             state.DetermineRuntimeLevel();
             log.LogInformation($"ConfigureTestDatabaseFactory - Determined RuntimeLevel: [{state.Level}]");
         }
