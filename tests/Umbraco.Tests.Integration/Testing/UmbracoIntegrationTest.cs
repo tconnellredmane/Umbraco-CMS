@@ -178,8 +178,8 @@ namespace Umbraco.Cms.Tests.Integration.Testing
                     context.HostingEnvironment = TestHelper.GetWebHostEnvironment();
                     configBuilder.Sources.Clear();
                     configBuilder.AddInMemoryCollection(InMemoryConfiguration);
-                    configBuilder.AddJsonFile("appsettings.Tests.json");
-                    configBuilder.AddEnvironmentVariables();
+                    configBuilder.AddConfiguration(GlobalSetupTeardown.TestConfiguration);
+
                     Configuration = configBuilder.Build();
                 })
                 .ConfigureServices((hostContext, services) =>
@@ -274,7 +274,7 @@ namespace Umbraco.Cms.Tests.Integration.Testing
             ILoggerFactory loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>();
 
             // This will create a db, install the schema and ensure the app is configured to run
-            SetupTestDatabase(testDatabaseFactoryProvider, databaseFactory, loggerFactory, state, TestHelper.WorkingDirectory);
+            SetupTestDatabase(testDatabaseFactoryProvider, databaseFactory, loggerFactory, state);
         }
 
         /// <summary>
@@ -283,7 +283,8 @@ namespace Umbraco.Cms.Tests.Integration.Testing
         /// <remarks>
         /// There must only be ONE instance shared between all tests in a session
         /// </remarks>
-        private ITestDatabase GetOrCreateDatabase(string filesPath, ILoggerFactory loggerFactory, TestUmbracoDatabaseFactoryProvider dbFactory)
+        private ITestDatabase GetOrCreateDatabase(ILoggerFactory loggerFactory,
+            TestUmbracoDatabaseFactoryProvider dbFactory)
         {
             lock (s_dbLocker)
             {
@@ -294,13 +295,15 @@ namespace Umbraco.Cms.Tests.Integration.Testing
 
                 var settings = new TestDatabaseSettings
                 {
-                    FilesPath = filesPath,
-                    Provider = Configuration.GetValue<string>("Tests:Database:Provider"),
+                    FilesPath = Path.Combine(TestHelper.WorkingDirectory, "databases"),
+                    DatabaseType = Configuration.GetValue<TestDatabaseSettings.TestDatabaseType>("Tests:Database:DatabaseType"),
                     PrepareThreadCount = Configuration.GetValue<int>("Tests:Database:PrepareThreadCount"),
                     EmptyDatabasesCount = Configuration.GetValue<int>("Tests:Database:EmptyDatabasesCount"),
                     SchemaDatabaseCount = Configuration.GetValue<int>("Tests:Database:SchemaDatabaseCount"),
                     SQLServerMasterConnectionString = Configuration.GetValue<string>("Tests:Database:SQLServerMasterConnectionString")
                 };
+
+                Directory.CreateDirectory(settings.FilesPath);
 
                 s_dbInstance = TestDatabaseFactory.Create(settings, dbFactory, loggerFactory);
 
@@ -315,25 +318,14 @@ namespace Umbraco.Cms.Tests.Integration.Testing
             TestUmbracoDatabaseFactoryProvider testUmbracoDatabaseFactoryProvider,
             IUmbracoDatabaseFactory databaseFactory,
             ILoggerFactory loggerFactory,
-            IRuntimeState runtimeState,
-            string workingDirectory)
+            IRuntimeState runtimeState)
         {
             if (TestOptions.Database == UmbracoTestOptions.Database.None)
             {
                 return;
             }
 
-            // need to manually register this factory
-            DbProviderFactories.RegisterFactory(Core.Constants.DbProviderNames.SqlServer, SqlClientFactory.Instance);
-
-            string dbFilePath = Path.Combine(workingDirectory, "databases");
-
-            if (!Directory.Exists(dbFilePath))
-            {
-                Directory.CreateDirectory(dbFilePath);
-            }
-
-            ITestDatabase db = GetOrCreateDatabase(dbFilePath, loggerFactory, testUmbracoDatabaseFactoryProvider);
+            ITestDatabase db = GetOrCreateDatabase(loggerFactory, testUmbracoDatabaseFactoryProvider);
 
             switch (TestOptions.Database)
             {
@@ -420,7 +412,6 @@ namespace Umbraco.Cms.Tests.Integration.Testing
         public Dictionary<string, string> InMemoryConfiguration { get; } = new Dictionary<string, string>();
 
         public IConfiguration Configuration { get; protected set; }
-
         public TestHelper TestHelper { get; } = new TestHelper();
 
         protected virtual void CustomTestSetup(IUmbracoBuilder builder) { }
