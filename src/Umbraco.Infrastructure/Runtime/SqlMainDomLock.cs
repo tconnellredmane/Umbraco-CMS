@@ -54,7 +54,6 @@ namespace Umbraco.Cms.Infrastructure.Runtime
             _lockId = Guid.NewGuid().ToString();
             _logger = logger;
             _globalSettings = globalSettings;
-            _sqlServerSyntax = new SqlServerSyntaxProvider(_globalSettings);
             _hostingEnvironment = hostingEnvironment;
             _dbFactory = new UmbracoDatabaseFactory(
                 loggerFactory.CreateLogger<UmbracoDatabaseFactory>(),

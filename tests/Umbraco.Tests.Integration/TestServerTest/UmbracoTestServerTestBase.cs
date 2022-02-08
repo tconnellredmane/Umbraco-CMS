@@ -28,6 +28,7 @@ using Umbraco.Cms.Web.Common.Controllers;
 using Umbraco.Cms.Web.Website.Controllers;
 using Umbraco.Extensions;
 using Umbraco.Persistence.Sqlite;
+using Umbraco.Persistence.SqlServer;
 
 namespace Umbraco.Cms.Tests.Integration.TestServerTest
 {
@@ -201,6 +202,7 @@ namespace Umbraco.Cms.Tests.Integration.TestServerTest
                 })
                 .AddWebServer()
                 .AddWebsite()
+                .AddUmbracoSqlServerSupport()
                 .AddUmbracoSqliteSupport()
                 .AddTestServices(TestHelper) // This is the important one!
                 .Build();
