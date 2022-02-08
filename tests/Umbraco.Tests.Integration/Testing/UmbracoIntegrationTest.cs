@@ -199,7 +199,6 @@ namespace Umbraco.Cms.Tests.Integration.Testing
 
         public virtual void ConfigureServices(IServiceCollection services)
         {
-            services.AddSingleton(TestHelper.DbProviderFactoryCreator);
             services.AddTransient<TestUmbracoDatabaseFactoryProvider>();
             IWebHostEnvironment webHostEnvironment = TestHelper.GetWebHostEnvironment();
             services.AddRequiredNetCoreServices(TestHelper, webHostEnvironment);
